@@ -1,0 +1,25 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:15
+    container_name: ainabi-postgres
+    restart: always
+    environment:
+      - POSTGRES_USER=ainabi
+      - POSTGRES_PASSWORD=ainabi_pass
+      - POSTGRES_DB=ainabi_db
+    ports:
+      - "5500:5432"
+    volumes:
+      - ainabi_db_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    container_name: ainabi-redis
+    restart: always
+    ports:
+      - "6500:6379"
+
+volumes:
+  ainabi_db_data:

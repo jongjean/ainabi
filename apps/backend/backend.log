@@ -1,0 +1,39 @@
+nohup: ignoring input
+
+> ainabi-backend@1.0.0 dev
+> ts-node-dev --respawn src/server.ts
+
+[INFO] 00:39:39 ts-node-dev ver. 2.0.0 (using ts-node ver. 10.9.2, typescript ver. 5.9.3)
+🚀 AINABI Premium Backend v2.0 running at http://localhost:8100
+ValidationError: The 'X-Forwarded-For' header is set but the Express 'trust proxy' setting is false (default). This could indicate a misconfiguration which would prevent express-rate-limit from accurately identifying users. See https://express-rate-limit.github.io/ERR_ERL_UNEXPECTED_X_FORWARDED_FOR/ for more information.
+    at Object.xForwardedForHeader (/media/ucon/UCONAI/home/ucon/ainabi/apps/backend/node_modules/express-rate-limit/dist/index.cjs:371:13)
+    at Object.wrappedValidations.<computed> [as xForwardedForHeader] (/media/ucon/UCONAI/home/ucon/ainabi/apps/backend/node_modules/express-rate-limit/dist/index.cjs:685:22)
+    at Object.keyGenerator (/media/ucon/UCONAI/home/ucon/ainabi/apps/backend/node_modules/express-rate-limit/dist/index.cjs:788:20)
+    at /media/ucon/UCONAI/home/ucon/ainabi/apps/backend/node_modules/express-rate-limit/dist/index.cjs:852:32
+    at processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at /media/ucon/UCONAI/home/ucon/ainabi/apps/backend/node_modules/express-rate-limit/dist/index.cjs:830:5 {
+  code: 'ERR_ERL_UNEXPECTED_X_FORWARDED_FOR',
+  help: 'https://express-rate-limit.github.io/ERR_ERL_UNEXPECTED_X_FORWARDED_FOR/'
+}
+[AI_CALL] user=anonymous IP=192.168.1.100 Session=20260418154011_001 category=relationship
+[Orchestrator] Executing Full Analysis Pipeline...
+[IntakeAgent] Processing real-time AI analysis...
+[AI_CALL_EXECUTE] #1 모델:deepseek-chat at 2026-04-18T15:40:11.268Z
+[AI_CALL] user=anonymous IP=192.168.1.100 Session=20260418154011_002 category=career
+[Orchestrator] Executing Full Analysis Pipeline...
+[IntakeAgent] Processing real-time AI analysis...
+[AI_CALL_EXECUTE] #2 모델:deepseek-chat at 2026-04-18T15:40:11.294Z
+[CausalAgent] Generating causal mapping with DeepSeek...
+[AI_CALL_EXECUTE] #3 모델:deepseek-chat at 2026-04-18T15:40:16.926Z
+[CausalAgent] Generating causal mapping with DeepSeek...
+[AI_CALL_EXECUTE] #4 모델:deepseek-chat at 2026-04-18T15:40:17.100Z
+[DomainAgent] Calculating domain impact weights...
+[AI_CALL_EXECUTE] #5 모델:deepseek-chat at 2026-04-18T15:40:23.714Z
+[DomainAgent] Calculating domain impact weights...
+[AI_CALL_EXECUTE] #6 모델:deepseek-chat at 2026-04-18T15:40:24.830Z
+[StrategyAgent] Formulating execution roadmap...
+[AI_CALL_EXECUTE] #7 모델:deepseek-chat at 2026-04-18T15:40:26.906Z
+[StrategyAgent] Formulating execution roadmap...
+[AI_CALL_EXECUTE] #8 모델:deepseek-chat at 2026-04-18T15:40:29.798Z
+[DB] Consultation saved for session=20260418154011_001 (IP: 192.168.1.100)
+[DB] Consultation saved for session=20260418154011_002 (IP: 192.168.1.100)
