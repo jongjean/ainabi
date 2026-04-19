@@ -4,11 +4,20 @@ import React, { useEffect } from 'react';
 import Link from 'next/link';
 import { motion, useAnimation } from 'framer-motion';
 import { useInView } from 'react-intersection-observer';
+import RelationCanvas from '../components/RelationCanvas';
 
 export default function LandingPage() {
+  // Force scroll to top on refresh
+  useEffect(() => {
+    if ('scrollRestoration' in window.history) {
+      window.history.scrollRestoration = 'manual';
+    }
+    window.scrollTo(0, 0);
+  }, []);
+
   // Navigation handler
   const handleLogoClick = () => {
-    window.location.reload();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   return (
@@ -117,18 +126,36 @@ export default function LandingPage() {
 
         .branding {
             text-align: right;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
         }
         .branding h1 {
-            font-size: 20px;
-            font-weight: 900;
-            letter-spacing: -0.05em;
+            font-size: 16px;
+            font-weight: 500;
             background: linear-gradient(to right, var(--neon-blue), var(--neon-pink), var(--neon-green));
             -webkit-background-clip: text;
             background-clip: text;
             -webkit-text-fill-color: transparent;
             line-height: 1;
+            margin: 0;
+            display: flex;
+            align-items: baseline;
+            gap: 6px;
+            white-space: nowrap;
+            /* Precise width matching for English subtext */
+            letter-spacing: 0.02em;
         }
-        @media (min-width: 640px) { .branding h1 { font-size: 30px; } }
+        @media (min-width: 640px) { 
+            .branding h1 { font-size: 22px; } 
+        }
+        .branding h1 .nabi-big {
+            font-size: 1.6em;
+            font-weight: 900;
+            letter-spacing: -0.02em;
+            color: #fff;
+            -webkit-text-fill-color: #fff; /* Override gradient */
+        }
         .branding span {
             display: none;
             font-size: 10px;
@@ -138,6 +165,10 @@ export default function LandingPage() {
             letter-spacing: 0.2em;
             opacity: 0.7;
             margin-top: 4px;
+            width: 100%;
+            white-space: nowrap;
+            text-align: justify;
+            text-align-last: justify;
         }
         @media (min-width: 640px) { .branding span { display: block; } }
 
@@ -239,11 +270,43 @@ export default function LandingPage() {
 
         .diagram-container {
             display: flex;
+            flex-direction: column;
+            gap: 20px;
+            margin-top: 80px;
+        }
+
+        .main-flow {
+            display: flex;
             align-items: center;
             justify-content: space-between;
-            margin-top: 80px;
             flex-wrap: wrap;
             gap: 10px;
+        }
+
+        .terminal-row {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 10px;
+            position: relative;
+        }
+
+        .terminal-row::before {
+            content: '';
+            position: absolute;
+            right: 48px;
+            top: -20px;
+            width: 1px;
+            height: 20px;
+            background: linear-gradient(to bottom, var(--neon-green), transparent);
+            opacity: 0.4;
+        }
+
+        .highlight-text {
+            background: linear-gradient(to right, var(--neon-blue), var(--neon-pink), var(--neon-green));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 900;
         }
 
         .node {
@@ -255,6 +318,7 @@ export default function LandingPage() {
             border: 1px solid rgba(0, 255, 163, 0.1);
             background: rgba(0, 255, 163, 0.05);
             transition: all 0.3s ease;
+            white-space: nowrap;
         }
 
         .node.active {
@@ -305,8 +369,19 @@ export default function LandingPage() {
             box-shadow: 0 10px 30px rgba(0, 255, 163, 0.15);
         }
 
+        .method-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 40px;
+            align-items: center;
+        }
+        @media (min-width: 768px) {
+            .method-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
         .method-list {
-            margin-top: 50px;
             display: flex;
             flex-direction: column;
             gap: 24px;
@@ -316,7 +391,7 @@ export default function LandingPage() {
             display: flex;
             align-items: center;
             gap: 20px;
-            font-size: 20px;
+            font-size: 18px;
             font-weight: 700;
         }
 
@@ -326,6 +401,7 @@ export default function LandingPage() {
             background: var(--neon-green);
             border-radius: 50%;
             box-shadow: 0 0 10px var(--neon-green);
+            flex-shrink: 0;
         }
 
         .cta-bottom {
@@ -384,7 +460,7 @@ export default function LandingPage() {
           </div>
           <div className="header-info">
             <div className="branding">
-              <h1>AI상담소 NABI</h1>
+              <h1>지능형 온라인 상담소 <span className="nabi-big">NABI</span></h1>
               <span>Neural Analysis & Behavioral Intelligence</span>
             </div>
             <div className="login-btn-box">
@@ -415,7 +491,6 @@ export default function LandingPage() {
               
               <div>
                 <Link href="/start" className="btn-primary">플랫폼 바로가기</Link>
-                <p className="hero-desc">3가지 질문으로 시작됩니다</p>
               </div>
             </FadeInSection>
           </div>
@@ -427,19 +502,22 @@ export default function LandingPage() {
             <FadeInSection>
               <h2 style={{ textAlign: 'center', fontSize: '14px', color: 'var(--neon-green)', letterSpacing: '0.4em', textTransform: 'uppercase', marginBottom: '40px', fontWeight: 900 }}>Systemic Flow</h2>
               <div className="diagram-container">
-                <div className="node">문제</div>
-                <div className="connector"></div>
-                <div className="node active">3가지 질문</div>
-                <div className="connector"></div>
-                <div className="node">구조 분석</div>
-                <div className="connector"></div>
-                <div className="node">보충자료수집</div>
-                <div className="connector"></div>
-                <div className="node">전략 가이드</div>
-                <div className="connector"></div>
-                <div className="node">실행 지원</div>
-                <div className="connector"></div>
-                <div className="node">문제 종결</div>
+                <div className="main-flow">
+                  <div className="node">문제</div>
+                  <div className="connector"></div>
+                  <div className="node active">3가지 질문</div>
+                  <div className="connector"></div>
+                  <div className="node">구조 분석</div>
+                  <div className="connector"></div>
+                  <div className="node">보충자료수집</div>
+                  <div className="connector"></div>
+                  <div className="node">전략 가이드</div>
+                  <div className="connector"></div>
+                  <div className="node">실행 지원</div>
+                </div>
+                <div className="terminal-row">
+                  <div className="node">문제 종결</div>
+                </div>
               </div>
             </FadeInSection>
           </div>
@@ -474,25 +552,31 @@ export default function LandingPage() {
         {/* Section 4: Method */}
         <section style={{ background: 'rgba(0,0,0,0.2)' }}>
           <div className="container">
-            <div style={{ maxWidth: '600px', margin: '0 auto' }}>
-              <FadeInSection>
-                <h2 style={{ fontSize: '30px', fontWeight: 800, marginBottom: '40px' }}>아이나비의 방식</h2>
-                <div className="method-list">
-                  <div className="method-item">
-                    <div className="method-dot"></div>
-                    <span>구조 중심 : 객관적 관점의 인과관계</span>
-                  </div>
-                  <div className="method-item">
-                    <div className="method-dot"></div>
-                    <span>관계 중심 : 역동의 파악과 대응 전략</span>
-                  </div>
-                  <div className="method-item">
-                    <div className="method-dot"></div>
-                    <span>실행 중심 : 실전 대화와 구체적 행동</span>
+            <FadeInSection>
+              <div className="method-grid">
+                <div>
+                  <h2 style={{ fontSize: '30px', fontWeight: 800, marginBottom: '40px' }}>아이나비의 방식</h2>
+                  <div className="method-list">
+                    <div className="method-item">
+                      <div className="method-dot"></div>
+                      <span>구조 중심 : 객관적 관점의 인과관계</span>
+                    </div>
+                    <div className="method-item">
+                      <div className="method-dot"></div>
+                      <span>관계 중심 : 역동의 파악과 대응 전략</span>
+                    </div>
+                    <div className="method-item">
+                      <div className="method-dot"></div>
+                      <span>실행 중심 : 실전 대화와 구체적 행동</span>
+                    </div>
                   </div>
                 </div>
-              </FadeInSection>
-            </div>
+                <div style={{ width: '100%' }}>
+                  <RelationCanvas />
+                  <p style={{ marginTop: '16px', fontSize: '11px', textAlign: 'center', color: 'var(--neon-blue)', opacity: 0.7, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Interactive Relation Network</p>
+                </div>
+              </div>
+            </FadeInSection>
           </div>
         </section>
 
@@ -549,8 +633,9 @@ export default function LandingPage() {
           <div className="container">
             <FadeInSection>
               <h2>
-                중요한 문제일수록<br/>
-                한 번은 구조로 정리해보셔야 합니다
+                열심히, 최선이 답이 아닙니다.<br/>
+                참고, 버티는 것만 능사가 아닙니다.<br/>
+                <span className="highlight-text">한번은 구조로 정리해 보셔야 합니다.</span>
               </h2>
               <div>
                 <Link href="/start" className="btn-primary">플랫폼 바로가기</Link>
@@ -563,7 +648,7 @@ export default function LandingPage() {
         <footer>
           <div className="container">
             <p>
-              © 2026 AI상담소 NABI. NEURAL ANALYSIS & <Link href="/admin" className="admin-link">B</Link>EHAVIORAL INTELLIGENCE. ALL RIGHTS RESERVED.
+              © 2026 나비동행 주식회사. NEURAL ANALYSIS & <Link href="/admin" className="admin-link">B</Link>EHAVIORAL INTELLIGENCE. ALL RIGHTS RESERVED.
             </p>
           </div>
         </footer>

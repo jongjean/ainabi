@@ -11,6 +11,14 @@ import { AuthModal } from '../../components/AuthModal';
 import { useEffect } from 'react';
 
 export default function Home() {
+  // Force scroll to top on refresh
+  useEffect(() => {
+    if ('scrollRestoration' in window.history) {
+      window.history.scrollRestoration = 'manual';
+    }
+    window.scrollTo(0, 0);
+  }, []);
+
   const [currentStage, setCurrentStage] = useState('READY'); 
   const [user, setUser] = useState<any>(null);
   const [token, setToken] = useState<string | null>(null);
@@ -392,9 +400,11 @@ export default function Home() {
 
         {/* RIGHT: Typography + Menu */}
         <div className="flex items-center gap-3 sm:gap-8">
-          <div className="flex flex-col text-right">
-            <span className="text-xl sm:text-3xl font-black tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-ainabi-blue via-ainabi-pink to-ainabi-green leading-none">AI상담소 NABI</span>
-            <span className="hidden sm:block text-[10px] font-mono text-ainabi-blue tracking-[0.2em] uppercase opacity-70 mt-1">Neural Analysis & Behavioral Intelligence</span>
+          <div className="flex flex-col text-right items-end">
+            <h1 className="text-base sm:text-lg md:text-[22px] font-medium tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-ainabi-blue via-ainabi-pink to-ainabi-green leading-none flex items-baseline gap-2 whitespace-nowrap">
+              지능형 온라인 상담소 <span className="text-2xl sm:text-3xl md:text-[35.2px] font-black text-[#fff] [text-fill-color:white] [-webkit-text-fill-color:white]">NABI</span>
+            </h1>
+            <span className="hidden sm:block text-[10px] font-mono text-ainabi-blue tracking-[0.2em] uppercase opacity-70 mt-1 w-full text-justify text-last-justify whitespace-nowrap">Neural Analysis & Behavioral Intelligence</span>
           </div>
           
           <div className="flex items-center px-4 sm:px-6 py-2 rounded-full border border-white/5 bg-white/5 backdrop-blur-xl">
@@ -591,7 +601,7 @@ export default function Home() {
 
       <footer className="relative w-full py-8 text-center z-10 mt-auto">
         <p className="text-[10px] font-mono tracking-[0.2em] text-white uppercase drop-shadow-md font-bold px-4 pointer-events-none">
-          © 2026 AI상담소 NABI. NEURAL ANALYSIS & <span onClick={() => window.location.href='/ainabi/admin'} className="cursor-default pointer-events-auto hover:text-white/80 transition-colors">B</span>EHAVIORAL INTELLIGENCE. ALL RIGHTS RESERVED.
+          © 2026 나비동행 주식회사. NEURAL ANALYSIS & <span onClick={() => window.location.href='/ainabi/admin'} className="cursor-default pointer-events-auto hover:text-white/80 transition-colors">B</span>EHAVIORAL INTELLIGENCE. ALL RIGHTS RESERVED.
         </p>
       </footer>
 
