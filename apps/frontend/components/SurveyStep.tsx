@@ -1,7 +1,7 @@
 'use client';
 
-import React from 'react';
-import { motion } from 'framer-motion';
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Check } from 'lucide-react';
 
 interface Option {
@@ -26,12 +26,36 @@ const SurveyStep: React.FC<SurveyStepProps> = ({
   value,
   onChange,
 }) => {
+  // Local state to manage the custom text for 'Other' option
+  const [customText, setCustomText] = useState('');
+
+  // Synchronize local custom text with external value
+  useEffect(() => {
+    if (type === 'radio' && typeof value === 'string' && value.startsWith('기타:')) {
+      setCustomText(value.split('기타:')[1] || '');
+    } else if (type === 'checkbox' && Array.isArray(value)) {
+      const otherVal = value.find(v => v.startsWith('기타:'));
+      if (otherVal) setCustomText(otherVal.split('기타:')[1] || '');
+    }
+  }, [value, type]);
+
+  const handleCustomTextChange = (text: string) => {
+    setCustomText(text);
+    if (type === 'radio') {
+      onChange(`기타:${text}`);
+    } else {
+      const current = Array.isArray(value) ? value : [];
+      const filtered = current.filter(v => !v.startsWith('기타'));
+      onChange([...filtered, `기타:${text}`]);
+    }
+  };
+
   const toggleCheckbox = (val: string) => {
     const current = Array.isArray(value) ? value : [];
-    if (current.includes(val)) {
-      onChange(current.filter((v: string) => v !== val));
+    if (current.some(v => v === val || (v.startsWith('기타') && val === '기타'))) {
+      onChange(current.filter((v: string) => v !== val && !v.startsWith('기타:')));
     } else {
-      onChange([...current, val]);
+      onChange([...current, val === '기타' ? `기타:${customText}` : val]);
     }
   };
 
@@ -43,11 +67,13 @@ const SurveyStep: React.FC<SurveyStepProps> = ({
       className="w-full max-w-2xl mx-auto space-y-12 py-10 metallic-glass p-12 rounded-[40px] chrome-border"
     >
       <div className="space-y-4 text-center">
-        <h2 className="text-2xl md:text-3xl font-semibold bg-clip-text text-transparent bg-gradient-to-r from-ainabi-blue via-ainabi-pink to-ainabi-green leading-snug tracking-tight pb-2 mt-2">
+        {/* Adjusted question font size and break behavior */}
+        <h2 className="text-xl md:text-2xl lg:text-3xl font-semibold bg-clip-text text-transparent bg-gradient-to-r from-ainabi-blue via-ainabi-pink to-ainabi-green leading-snug tracking-tight pb-2 mt-2 whitespace-nowrap overflow-hidden text-ellipsis">
           {question}
         </h2>
         {description && (
-          <p className="text-white text-base md:text-lg font-medium opacity-90 drop-shadow-md">
+          /* Using whitespace-pre-wrap to respect \n */
+          <p className="text-white text-base md:text-lg font-medium opacity-90 drop-shadow-md whitespace-pre-wrap break-keep">
             {description}
           </p>
         )}
@@ -55,13 +81,13 @@ const SurveyStep: React.FC<SurveyStepProps> = ({
 
       <div className="grid grid-cols-1 gap-4">
         {type === 'radio' && options?.map((opt) => {
-          const isSelected = value === opt.value || (typeof value === 'string' && value.startsWith('기타') && opt.value.startsWith('기타'));
-          const isCustom = opt.label === '그 외' || opt.label === '기타';
+          const isOther = opt.value === '기타';
+          const isSelected = isOther ? (typeof value === 'string' && value.startsWith('기타')) : (value === opt.value);
           
           return (
-            <div key={opt.value} className="flex flex-col gap-2">
+            <div key={opt.value} className="flex flex-col gap-3">
               <button
-                onClick={() => onChange(opt.value)}
+                onClick={() => onChange(isOther ? `기타:${customText}` : opt.value)}
                 className={`group relative w-full p-6 rounded-[24px] border transition-all duration-500 text-left flex items-center justify-between ${
                   isSelected
                     ? 'bg-ainabi-blue/15 border-ainabi-blue/50 text-white shadow-[0_0_30px_rgba(0,229,255,0.2)] scale-[1.02]'
@@ -73,27 +99,36 @@ const SurveyStep: React.FC<SurveyStepProps> = ({
                   isSelected ? 'bg-ainabi-blue scale-125 shadow-[0_0_10px_#00E5FF]' : 'bg-white/30'
                 }`} />
               </button>
-              {isSelected && isCustom && (
-                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}>
-                  <input 
-                    type="text" 
-                    placeholder="내용을 간단히 입력해주세요" 
-                    autoFocus
-                    onChange={(e) => onChange(`${opt.value}_${e.target.value}`)}
-                    className="w-full mt-2 p-4 bg-white/[0.05] border border-ainabi-blue/30 rounded-[16px] text-white focus:outline-none focus:border-ainabi-blue placeholder:text-white/30"
-                  />
-                </motion.div>
-              )}
+              
+              <AnimatePresence>
+                {isSelected && isOther && (
+                  <motion.div 
+                    initial={{ opacity: 0, height: 0 }} 
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <input 
+                      type="text" 
+                      placeholder="내용을 구체적으로 입력해주세요" 
+                      autoFocus
+                      value={customText}
+                      onChange={(e) => handleCustomTextChange(e.target.value)}
+                      className="w-full p-5 bg-white/[0.05] border border-ainabi-blue/30 rounded-[20px] text-white focus:outline-none focus:border-ainabi-blue focus:shadow-[0_0_15px_rgba(0,229,255,0.2)] placeholder:text-white/20 transition-all font-light"
+                    />
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           );
         })}
 
         {type === 'checkbox' && options?.map((opt) => {
-          const isSelected = Array.isArray(value) && value.some(v => v === opt.value || (v.startsWith('기타') && opt.value.startsWith('기타')));
-          const isCustom = opt.label === '그 외' || opt.label === '기타';
+          const isOther = opt.value === '기타';
+          const isSelected = Array.isArray(value) && value.some(v => v === opt.value || (isOther && v.startsWith('기타:')));
           
           return (
-            <div key={opt.value} className="flex flex-col gap-2">
+            <div key={opt.value} className="flex flex-col gap-3">
               <button
                 onClick={() => toggleCheckbox(opt.value)}
                 className={`group relative w-full p-6 rounded-[24px] border transition-all duration-500 text-left flex items-center justify-between ${
@@ -109,20 +144,26 @@ const SurveyStep: React.FC<SurveyStepProps> = ({
                   {isSelected && <Check className="w-4 h-4 text-black" />}
                 </div>
               </button>
-              {isSelected && isCustom && (
-                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}>
-                  <input 
-                    type="text" 
-                    placeholder="내용을 간단히 입력해주세요" 
-                    autoFocus
-                    onChange={(e) => {
-                      const newArr = value.filter((v: string) => !v.startsWith('기타'));
-                      onChange([...newArr, `${opt.value}_${e.target.value}`]);
-                    }}
-                    className="w-full mt-2 p-4 bg-white/[0.05] border border-ainabi-blue/30 rounded-[16px] text-white focus:outline-none focus:border-ainabi-blue placeholder:text-white/30"
-                  />
-                </motion.div>
-              )}
+              
+              <AnimatePresence>
+                {isSelected && isOther && (
+                  <motion.div 
+                    initial={{ opacity: 0, height: 0 }} 
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <input 
+                      type="text" 
+                      placeholder="내용을 구체적으로 입력해주세요" 
+                      autoFocus
+                      value={customText}
+                      onChange={(e) => handleCustomTextChange(e.target.value)}
+                      className="w-full p-5 bg-white/[0.05] border border-ainabi-blue/30 rounded-[20px] text-white focus:outline-none focus:border-ainabi-blue focus:shadow-[0_0_15px_rgba(0,229,255,0.2)] placeholder:text-white/20 transition-all font-light"
+                    />
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           );
         })}
@@ -132,7 +173,7 @@ const SurveyStep: React.FC<SurveyStepProps> = ({
             value={value || ''}
             onChange={(e) => onChange(e.target.value)}
             placeholder="상황을 구체적으로 적어주실수록 AI가 핵심을 더 정확히 짚어냅니다..."
-            className="w-full h-80 bg-white/[0.03] border border-white/10 rounded-[32px] p-8 text-xl font-light leading-relaxed focus:outline-none focus:border-ainabi-blue/40 focus:bg-white/[0.05] transition-all duration-500 resize-none placeholder:text-white/10"
+            className="w-full h-80 bg-white/[0.03] border border-white/10 rounded-[32px] p-8 text-xl font-light leading-relaxed focus:outline-none focus:border-ainabi-blue/40 focus:bg-white/[0.05] transition-all duration-500 resize-none placeholder:text-white/10 break-keep"
           />
         )}
       </div>

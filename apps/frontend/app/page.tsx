@@ -1,576 +1,599 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Activity, ArrowRight, ArrowLeft, LayoutDashboard, Target, Zap } from 'lucide-react';
-import SurveyStep from '../components/SurveyStep';
-import SummaryPanel from '../components/SummaryPanel';
-import CausalGraph from '../components/CausalGraph';
-import AnalysisReport from '../components/AnalysisReport';
-import { AuthModal } from '../components/AuthModal';
-import { useEffect } from 'react';
+import React, { useEffect } from 'react';
+import Link from 'next/link';
+import { motion, useAnimation } from 'framer-motion';
+import { useInView } from 'react-intersection-observer';
 
-export default function Home() {
-  const [currentStage, setCurrentStage] = useState('READY'); 
-  const [user, setUser] = useState<any>(null);
-  const [token, setToken] = useState<string | null>(null);
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [currentStep, setCurrentStep] = useState(1);
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  const [isSavingStep, setIsSavingStep] = useState(false);
-  const [surveyData, setSurveyData] = useState<any>({
-    category: '',
-    target: '',
-    types: [],
-    period: '',
-    severity: '',
-    impact: [],
-    response: '',
-    description: ''
-  });
-  const [analysisResult, setAnalysisResult] = useState<any>(null);
-  const isAnalyzing = useRef(false);
-
-  // 세션 복구 및 초기화 로직
-  useEffect(() => {
-    const savedToken = localStorage.getItem('ainabi_token');
-    const savedUser = localStorage.getItem('ainabi_user');
-    const savedSessionId = localStorage.getItem('ainabi_session_id');
-
-    if (savedToken && savedUser) {
-      setToken(savedToken);
-      setUser(JSON.parse(savedUser));
-    }
-
-    if (savedSessionId) {
-      // 서버에서 실시간 스냅샷 조회하여 복구
-      fetch(`/ainabi-api/session/${savedSessionId}`)
-        .then(res => res.json())
-        .then(result => {
-          if (result.success && result.status === 'in_progress' && result.snapshot) {
-            const snap = result.snapshot;
-            setSessionId(savedSessionId);
-            setSurveyData({
-              ...snap.context,
-              ...snap.structure,
-              ...snap.depth,
-              description: snap.narrative
-            });
-            // 마지막 응답한 단계 다음으로 단계 설정 (간단히 채워진 데이터 수로 판별 가능하지만, 
-            // 여기서는 스냅샷이 존재하면 최소 1단계는 한 것으로 보고 진행)
-            setCurrentStage('STEP');
-            // 채워진 필드 검사하여 단계 추론 로직 (생략 가능, 1단계부터 보여줘도 데이터는 프리필 되어 있음)
-
-          } else {
-            localStorage.removeItem('ainabi_session_id');
-          }
-        })
-        .catch(err => console.error("세션 복구 로드 실패:", err));
-    }
-  }, []);
-
-  const handleAuthSuccess = (newToken: string, newUser: any) => {
-    setToken(newToken);
-    setUser(newUser);
-    localStorage.setItem('ainabi_token', newToken);
-    localStorage.setItem('ainabi_user', JSON.stringify(newUser));
-  };
-
-  const handleStartProcess = async () => {
-    try {
-      const resp = await fetch('/ainabi-api/session', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        }
-      });
-      const result = await resp.json();
-      if (result.success) {
-        setSessionId(result.sessionId);
-        localStorage.setItem('ainabi_session_id', result.sessionId);
-        setCurrentStage('STEP');
-      }
-    } catch (err) {
-      console.error("세션 생성 실패:", err);
-      setCurrentStage('STEP');
-    }
-  };
-
-  // 설문 문항 구성 (사용자 시나리오 기반 MECE 개편)
-  const steps = [
-    {
-      id: 1,
-      question: "무슨 문제가 있습니까?",
-      description: "문제를 구조화하는 첫 번째 단계입니다.",
-      type: 'radio',
-      key: 'category',
-      options: [
-        { label: '개인/심리', value: '심리' },
-        { label: '사람/관계', value: '관계' },
-        { label: '재무/경제', value: '재무' },
-        { label: '직장/사업', value: '직장' },
-        { label: '잘 모르겠다', value: '모름' }
-      ]
-    },
-    {
-      id: 2,
-      question: "누구(무엇)와의 문제(관계)인가요?",
-      description: "문제의 대상을 명확히 함으로써 인과관계의 정밀도를 높입니다.",
-      type: 'radio',
-      key: 'target',
-      options: surveyData.category === '심리' 
-        ? [
-            { label: '나 자신 (정체성/방향)', value: '나자신' },
-            { label: '감정/스트레스', value: '감정스트레스' },
-            { label: '성격/습관', value: '성격습관' },
-            { label: '불안/우울/무기력', value: '불안우울' },
-            { label: '동기/의욕', value: '동기의욕' },
-            { label: '자기관리 (생활, 루틴)', value: '자기관리' },
-            { label: '건강/컨디션', value: '건강' },
-            { label: '그 외', value: '기타' }
-          ]
-        : surveyData.category === '관계'
-        ? [
-            { label: '배우자/연인', value: '배우자연인' },
-            { label: '가족/친지', value: '가족' },
-            { label: '자녀', value: '자녀' },
-            { label: '친구/지인', value: '지인' },
-            { label: '상사/동료', value: '상사동료' },
-            { label: '갈등/소통 문제', value: '소통' },
-            { label: '신뢰/배신', value: '신뢰' },
-            { label: '그 외', value: '기타' }
-          ]
-        : surveyData.category === '재무'
-        ? [
-            { label: '급여/소득', value: '급여소득' },
-            { label: '매출/수익', value: '매출수익' },
-            { label: '지출/관리', value: '지출관리' },
-            { label: '부채/대출', value: '부채대출' },
-            { label: '투자/자산', value: '투자자산' },
-            { label: '세금/노무', value: '세무노무' },
-            { label: '자금 운영', value: '자금운영' },
-            { label: '그 외', value: '기타' }
-          ]
-        : surveyData.category === '직장'
-        ? [
-            { label: '업무 스트레스', value: '업무스트레스' },
-            { label: '조직 문제', value: '조직' },
-            { label: '고객/거래처', value: '고객거래처' },
-            { label: '사업 운영', value: '사업운영' },
-            { label: '성과/매출 구조', value: '성과구조' },
-            { label: '진로/이직', value: '진로이직' },
-            { label: '불법/부당 상황', value: '부당' },
-            { label: '그 외', value: '기타' }
-          ]
-        : [
-            { label: '나 자신', value: '자기' },
-            { label: '조직/회사', value: '조직' },
-            { label: '시장/고객', value: '시장' },
-            { label: '가족/지인', value: '가족지인' },
-            { label: '그 외', value: '기타' }
-          ]
-    },
-    {
-      id: 3,
-      question: "다른 영역도 영향을 받고 있나요?",
-      description: "복합적인 상황일수록 더 입체적인 분석이 가능합니다.",
-      type: 'checkbox',
-      key: 'impact',
-      options: [
-        { label: '관계 (사람과 갈등)', value: '관계' },
-        { label: '재무 (금전적 손실)', value: '재무' },
-        { label: '심리 (정신적 고통)', value: '심리' },
-        { label: '사업 (업무상 지장)', value: '사업' },
-        { label: '그외 [  ]', value: '기타' }
-      ]
-    },
-    {
-      id: 4,
-      question: "어떤 유형의 불편함이 있나요?",
-      description: "복수 선택이 가능합니다. 문제의 조각들을 모두 알려주세요.",
-      type: 'checkbox',
-      key: 'types',
-      options: [
-        { label: '대화 부족/단절', value: '대화' },
-        { label: '신뢰 문제', value: '신뢰' },
-        { label: '경제적 갈등', value: '경제' },
-        { label: '성격/가치관 차이', value: '가치관' },
-        { label: '감정적 폭발/다툼', value: '다툼' },
-        { label: '미래에 대한 불안', value: '불안' },
-        { label: '그외 [  ]', value: '기타' }
-      ]
-    },
-    {
-      id: 5,
-      question: "문제는 언제부터 시작되었나요?",
-      type: 'radio',
-      key: 'period',
-      options: [
-        { label: '최근(1개월 이내)', value: '최근' },
-        { label: '1~3개월', value: '단기' },
-        { label: '3~6개월', value: '중기' },
-        { label: '6개월~1년', value: '장기' },
-        { label: '1년 이상', value: '고질적' },
-        { label: '10년 이상', value: '10년이상' }
-      ]
-    },
-    {
-      id: 6,
-      question: "현재 상황은 어느 정도로 심각한가요?",
-      type: 'radio',
-      key: 'severity',
-      options: [
-        { label: '가벼운 스트레스', value: '경미' },
-        { label: '지속적인 불편함', value: '보통' },
-        { label: '상당히 고통스러움', value: '심각' },
-        { label: '관계/상황 붕괴 직전', value: '임계' },
-        { label: '그외 [  ]', value: '기타' }
-      ]
-    },
-    {
-      id: 7,
-      question: "지금까지 어떻게 대응해 오셨나요?",
-      type: 'radio',
-      key: 'response',
-      options: [
-        { label: '그냥 참고 있음', value: '인내' },
-        { label: '대화를 시도함', value: '노력' },
-        { label: '전문가 상담 시도', value: '도움' },
-        { label: '갈등 반복/폭발', value: '갈등' },
-        { label: '회피/포기 상태', value: '포기' },
-        { label: '그외 [  ]', value: '기타' }
-      ]
-    },
-    {
-      id: 8,
-      question: "자유롭게 하고 싶은 말 무엇이건 적어주세요.",
-      description: "사건의 맥락과 감정을 자유롭게 서술해 주세요. AI 상담의 핵심 데이터가 됩니다.",
-      type: 'textarea',
-      key: 'description'
-    }
-  ];
-
-  const handleNext = async () => {
-    const currentStepConfig = steps[currentStep - 1];
-    const stepData = { [currentStepConfig.key]: surveyData[currentStepConfig.key] };
-
-    if (sessionId) {
-      setIsSavingStep(true);
-      try {
-        await fetch(`/ainabi-api/session/${sessionId}/step`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            step: currentStep,
-            data: stepData
-          })
-        });
-      } catch (err) {
-        console.error("단계 저장 실패:", err);
-      } finally {
-        setIsSavingStep(false);
-      }
-    }
-
-    if (currentStep < 8) {
-      setCurrentStep(prev => prev + 1);
-    } else {
-      handleAnalyze();
-    }
-  };
-
-  const handlePrev = () => {
-    if (currentStep > 1) {
-      setCurrentStep(prev => prev - 1);
-    } else {
-      setCurrentStage('READY');
-    }
-  };
-
-  const handleAnalyze = async () => {
-    if (isAnalyzing.current) return;
-    
-    isAnalyzing.current = true;
-    setCurrentStage('ANALYZING');
-
-    try {
-      const resp = await fetch('/ainabi-api/analyze', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify({ 
-          surveyData, 
-          sessionId
-        })
-      });
-      
-      const result = await resp.json();
-      if (result.success) {
-        // 분석 성공 시 세션 클리어
-        localStorage.removeItem('ainabi_session_id');
-        setSessionId(null);
-
-        const { causal, domain, strategy } = result.data;
-        setAnalysisResult({
-          insight: causal.insight,
-          graph: causal.graph,
-          domain: domain.domain,
-          weight: domain.weight || 0.8,
-          // 전략 데이터 매핑
-          rootCause: strategy.root_cause,
-          solutionOrder: strategy.solution_order,
-          roadmap: strategy.roadmap,
-          todaysAction: strategy.todays_action
-        });
-        setCurrentStage('RESULT');
-      } else {
-        throw new Error(result.error || "분석 실패");
-      }
-    } catch (err) {
-      console.error("분석 에러:", err);
-      setCurrentStage('STEP');
-      setCurrentStep(8);
-      alert("분석 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
-    } finally {
-      isAnalyzing.current = false;
-    }
-  };
-
-  const updateSurveyData = (key: string, val: any) => {
-    setSurveyData((prev: any) => ({ ...prev, [key]: val }));
+export default function LandingPage() {
+  // Navigation handler
+  const handleLogoClick = () => {
+    window.location.reload();
   };
 
   return (
-    <main className="min-h-screen bg-[#050505] text-ainabi-silver font-sans selection:bg-ainabi-blue/30 overflow-x-hidden relative flex flex-col">
-      {/* [NEW] Cyber Scanline Overlay */}
-      <div className="scanline-overlay" />
+    <div className="landing-wrapper">
+      <style jsx global>{`
+        :root {
+            --bg-main: #001233;
+            --bg-sub: #001C44;
+            --neon-blue: #00E5FF;
+            --neon-green: #00FFA3;
+            --neon-pink: #FF00E5;
+            --text-main: #F1F5F9;
+            --text-muted: #94A3B8;
+            --glass-bg: rgba(0, 255, 163, 0.03);
+            --glass-border: rgba(0, 255, 163, 0.15);
+        }
 
-      {/* HEADER */}
-      <nav className="fixed top-0 w-full z-50 px-4 py-4 sm:p-8 flex justify-between items-center bg-gradient-to-b from-black/95 to-transparent backdrop-blur-sm">
-        {/* LEFT: Logo (Flat butterfly masked to circle) */}
-        <div onClick={() => setCurrentStage('READY')} className="flex items-center cursor-pointer group shrink-0">
-          <motion.div 
-            initial={{ rotate: -10, opacity: 0 }}
-            animate={{ rotate: 0, opacity: 1 }}
-            className="w-10 h-10 sm:w-12 sm:h-12 relative rounded-full overflow-hidden border border-ainabi-blue/50 shadow-[0_0_15px_rgba(0,229,255,0.4)] group-hover:scale-110 transition-transform"
-          >
-            <img src="/ainabi/logo.png" alt="AI상담소 NABI Logo" className="w-full h-full object-cover" />
-          </motion.div>
-        </div>
+        .landing-wrapper {
+            font-family: 'Pretendard', sans-serif;
+            background: #000814;
+            color: var(--text-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            word-break: keep-all;
+            min-height: 100vh;
+        }
 
-        {/* RIGHT: Typography + Menu */}
-        <div className="flex items-center gap-3 sm:gap-8">
-          <div className="flex flex-col text-right">
-            <span className="text-xl sm:text-3xl font-black tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-ainabi-blue via-ainabi-pink to-ainabi-green leading-none">AI상담소 NABI</span>
-            <span className="hidden sm:block text-[10px] font-mono text-ainabi-blue tracking-[0.2em] uppercase opacity-70 mt-1">Neural Analysis & Behavioral Intelligence</span>
+        .bg-layer {
+            position: fixed;
+            inset: 0;
+            background: radial-gradient(circle at 15% 15%, rgba(0, 229, 255, 0.15), transparent 45%),
+                        radial-gradient(circle at 85% 85%, rgba(0, 255, 163, 0.2), transparent 45%),
+                        radial-gradient(circle at 50% 50%, rgba(0, 18, 51, 0.6), rgba(0, 8, 20, 0.8));
+            backdrop-filter: blur(1px);
+            z-index: 1;
+        }
+
+        .butterfly-fixed {
+            position: fixed;
+            bottom: 5%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 50%;
+            max-width: 500px;
+            opacity: 0.9;
+            z-index: 0;
+            pointer-events: none;
+            mix-blend-mode: lighten;
+            filter: brightness(1.6) contrast(1.2) saturate(1.2);
+        }
+
+        .content-layer {
+            position: relative;
+            z-index: 10;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        .glass {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            backdrop-filter: blur(12px);
+            border-radius: 20px;
+        }
+
+        nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            z-index: 100;
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);
+            backdrop-filter: blur(4px);
+        }
+
+        @media (min-width: 640px) { nav { padding: 32px; } }
+
+        .logo-box {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            overflow: hidden;
+            border: 1px solid rgba(0, 229, 255, 0.5);
+            box-shadow: 0 0 15px rgba(0, 229, 255, 0.4);
+            cursor: pointer;
+            transition: transform 0.3s ease;
+        }
+        @media (min-width: 640px) { .logo-box { width: 48px; height: 48px; } }
+        .logo-box:hover { transform: scale(1.1); }
+        .logo-box img { width: 100%; height: 100%; object-fit: cover; }
+
+        .header-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        @media (min-width: 640px) { .header-info { gap: 32px; } }
+
+        .branding {
+            text-align: right;
+        }
+        .branding h1 {
+            font-size: 20px;
+            font-weight: 900;
+            letter-spacing: -0.05em;
+            background: linear-gradient(to right, var(--neon-blue), var(--neon-pink), var(--neon-green));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            line-height: 1;
+        }
+        @media (min-width: 640px) { .branding h1 { font-size: 30px; } }
+        .branding span {
+            display: none;
+            font-size: 10px;
+            font-family: monospace;
+            color: var(--neon-blue);
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+            opacity: 0.7;
+            margin-top: 4px;
+        }
+        @media (min-width: 640px) { .branding span { display: block; } }
+
+        .login-btn-box {
+            padding: 8px 16px;
+            border-radius: 9999px;
+            border: 1px solid rgba(255,255,255,0.05);
+            background: rgba(255,255,255,0.05);
+            backdrop-filter: blur(20px);
+        }
+        .login-btn-box a {
+            font-size: 9px;
+            font-weight: 700;
+            color: var(--neon-blue);
+            text-decoration: none;
+            letter-spacing: 0.2em;
+            transition: transform 0.3s ease;
+            display: inline-block;
+        }
+        @media (min-width: 640px) { .login-btn-box a { font-size: 10px; } }
+        .login-btn-box a:hover { transform: scale(1.05); }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--neon-blue), var(--neon-green));
+            color: #000;
+            padding: 16px 32px;
+            border-radius: 12px;
+            text-decoration: none;
+            font-weight: 700;
+            display: inline-block;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            box-shadow: 0 4px 15px rgba(0, 229, 255, 0.2);
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 0 20px rgba(0, 229, 255, 0.4), 0 0 40px rgba(0, 255, 163, 0.2);
+        }
+
+        section {
+            padding: 100px 0;
+            position: relative;
+        }
+
+        .hero {
+            padding-top: 180px;
+            padding-bottom: 80px;
+            text-align: center;
+        }
+
+        .hero h2 {
+            font-size: clamp(32px, 5vw, 56px);
+            font-weight: 900;
+            margin-bottom: 16px;
+            background: linear-gradient(to bottom, #fff, #94A3B8);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.02em;
+        }
+
+        .hero .subtitle {
+            font-size: clamp(16px, 2vw, 22px);
+            color: var(--neon-blue);
+            font-weight: 600;
+            margin-bottom: 50px;
+            letter-spacing: 0.1em;
+        }
+
+        .hero-questions {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            margin-bottom: 50px;
+        }
+
+        .question-item {
+            padding: 24px;
+            font-size: 18px;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.9);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .question-item:last-child { border: none; }
+
+        .hero-desc {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 24px;
+            font-weight: 400;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+
+        .diagram-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 80px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .node {
+            padding: 12px 24px;
+            font-size: 13px;
+            font-weight: 800;
+            border-radius: 12px;
+            text-align: center;
+            border: 1px solid rgba(0, 255, 163, 0.1);
+            background: rgba(0, 255, 163, 0.05);
+            transition: all 0.3s ease;
+        }
+
+        .node.active {
+            border-color: var(--neon-green);
+            color: var(--neon-green);
+            background: rgba(0, 255, 163, 0.1);
+            box-shadow: 0 0 20px rgba(0, 255, 163, 0.4);
+            transform: scale(1.1);
+        }
+
+        .connector {
+            flex: 1;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--neon-green), transparent);
+            min-width: 20px;
+            opacity: 0.6;
+        }
+
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 30px;
+            margin-top: 60px;
+        }
+
+        .card {
+            padding: 40px;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 1px solid rgba(0, 255, 163, 0.1);
+        }
+
+        .card h3 {
+            font-size: 20px;
+            margin-bottom: 20px;
+            color: var(--neon-green);
+        }
+
+        .card p {
+            font-size: 15px;
+            color: var(--text-muted);
+            line-height: 1.7;
+        }
+
+        .card:hover {
+            border-color: var(--neon-green);
+            transform: translateY(-8px);
+            background: rgba(0, 255, 163, 0.08);
+            box-shadow: 0 10px 30px rgba(0, 255, 163, 0.15);
+        }
+
+        .method-list {
+            margin-top: 50px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .method-item {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .method-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--neon-green);
+            border-radius: 50%;
+            box-shadow: 0 0 10px var(--neon-green);
+        }
+
+        .cta-bottom {
+            text-align: center;
+            padding-bottom: 120px;
+        }
+
+        .cta-bottom h2 {
+            font-size: clamp(24px, 4vw, 36px);
+            font-weight: 800;
+            margin-bottom: 40px;
+            line-height: 1.4;
+        }
+
+        footer {
+            position: relative;
+            width: 100%;
+            padding: 32px 0;
+            text-align: center;
+            z-index: 10;
+        }
+
+        footer p {
+            font-size: 10px;
+            font-family: monospace;
+            letter-spacing: 0.2em;
+            color: #fff;
+            text-transform: uppercase;
+            font-weight: 700;
+            padding: 0 24px;
+        }
+
+        .admin-link {
+            cursor: pointer;
+            transition: color 0.3s ease;
+        }
+        .admin-link:hover { color: var(--neon-blue); }
+
+        @media (max-width: 768px) {
+            section { padding: 60px 0; }
+            .hero { padding-top: 140px; }
+            .diagram-container { flex-direction: column; align-items: stretch; }
+            .connector { width: 1px; height: 30px; margin: 0 auto; }
+            .node { width: 100%; }
+        }
+      `}</style>
+
+      <div className="bg-layer" />
+      <img src="/ainabi/butterfly.png" className="butterfly-fixed" alt="Background Butterfly" />
+
+      <div className="content-layer">
+        {/* Header Navigation */}
+        <nav>
+          <div onClick={handleLogoClick} className="logo-box">
+            <img src="/ainabi/logo.png" alt="AI상담소 NABI Logo" />
           </div>
-          
-          <div className="flex items-center px-4 sm:px-6 py-2 rounded-full border border-white/5 bg-white/5 backdrop-blur-xl">
-            {user ? (
-              <div className="flex items-center gap-2 sm:gap-4">
-                <span className="text-[9px] sm:text-[10px] font-bold text-ainabi-blue uppercase tracking-widest truncate max-w-[60px] sm:max-w-none">{user.username}</span>
-                <button 
-                  onClick={() => {
-                    localStorage.clear();
-                    window.location.reload();
-                  }}
-                  className="text-[8px] sm:text-[9px] text-white/70 hover:text-white uppercase border-l border-white/10 pl-2 sm:pl-4"
-                >
-                  Logout
-                </button>
-              </div>
-            ) : (
-              <button 
-                onClick={() => setIsAuthModalOpen(true)}
-                className="text-[9px] sm:text-[10px] font-bold text-ainabi-blue uppercase tracking-widest hover:scale-105 transition-transform"
-              >
-                LOGIN
-              </button>
-            )}
+          <div className="header-info">
+            <div className="branding">
+              <h1>AI상담소 NABI</h1>
+              <span>Neural Analysis & Behavioral Intelligence</span>
+            </div>
+            <div className="login-btn-box">
+              <Link href="/start">LOGIN</Link>
+            </div>
           </div>
-        </div>
-      </nav>
+        </nav>
 
-      <div className="max-w-6xl mx-auto px-6 py-32 min-h-screen flex flex-col items-center justify-center">
-        <AnimatePresence mode="wait">
-          {currentStage === 'READY' && (
-            <motion.div 
-              key="ready"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="text-center space-y-12"
-            >
-              <div className="space-y-6 flex flex-col items-center relative w-full">
-                {/* [NEW] Main Butterfly Graphic (Responsive up to 512px) */}
-                <div className="w-full max-w-[512px] aspect-square flex items-center justify-center relative -mb-16 -mt-10 mix-blend-screen opacity-90 z-0 pointer-events-none">
-                  <div className="absolute inset-0 bg-ainabi-blue/5 rounded-full blur-[100px]" />
-                  <img src="/ainabi/butterfly.png" alt="Cyber Butterfly Main" className="w-full h-full object-contain" />
-                </div>
-
-                <h2 className="relative z-10 w-full text-2xl sm:text-3xl md:text-5xl lg:text-7xl font-mono font-black leading-[1.3] md:leading-[1.1] tracking-tighter text-transparent bg-clip-text bg-gradient-to-b from-white via-ainabi-silver to-white/50 text-center break-keep px-2">
-                  지금 당신의 <span className="text-transparent bg-clip-text bg-gradient-to-r from-ainabi-blue via-ainabi-pink to-ainabi-green">어려움</span>을<br className="hidden sm:block"/>
-                  <span className="sm:hidden"> </span>AI 신경망으로 분석해 드립니다.
-                </h2>
-                <p className="max-w-xl mx-auto text-ainabi-blue/80 text-sm md:text-lg font-mono font-medium leading-relaxed mt-6 tracking-wide break-keep px-4">
-                  단순한 상담이 아닙니다. 문제의 인과관계를 차트로 구현하고 <br className="hidden sm:block"/>
-                  최적의 행동 경로를 설계하는 AI 데이터 경험입니다.
-                </p>
+        {/* Section 1: Hero */}
+        <section className="hero">
+          <div className="container">
+            <FadeInSection>
+              <h2>온라인 상담소 아이나비</h2>
+              <div style={{ fontSize: '14px', fontWeight: 200, letterSpacing: '0.8em', color: 'var(--neon-blue)', marginTop: '-10px', marginBottom: '30px', opacity: 0.8, fontFamily: 'monospace' }}>A I N A B I</div>
+              <p className="subtitle">복잡한 상황을 정리하고 방향을 잡습니다</p>
+            </FadeInSection>
+            
+            <FadeInSection>
+              <div className="glass hero-questions">
+                <div className="question-item">무슨 일이 있었나요?</div>
+                <div className="question-item">누구와의 문제인가요?</div>
+                <div className="question-item">어떻게 여기까지 오게 되었나요?</div>
               </div>
-              <button 
-                onClick={handleStartProcess}
-                className="relative mt-12 px-12 py-6 bg-gradient-to-r from-ainabi-blue via-ainabi-pink to-ainabi-green text-black font-black rounded-full hover:shadow-[0_0_40px_rgba(0,229,255,0.6)] hover:scale-105 transition-all duration-500 flex items-center gap-4 mx-auto text-lg border cursor-pointer z-10"
-              >
-                <span className="relative z-10 uppercase tracking-widest">분석 파이프라인 가동</span>
-                <ArrowRight className="w-5 h-5 relative z-10" />
-              </button>
-            </motion.div>
-          )}
+            </FadeInSection>
 
-          {currentStage === 'STEP' && (
-            <motion.div 
-              key="step"
-              className="w-full flex flex-col items-center"
-            >
-              {/* Progress Tracker (Slim) & Navigation */}
-              <div className="w-full max-w-2xl mb-8">
-                <div className="flex items-center gap-6 mb-6">
-                   <div className="flex-1 h-0.5 bg-white/5 rounded-full overflow-hidden">
-                      <motion.div 
-                         initial={{ width: 0 }}
-                         animate={{ width: `${(currentStep / 8) * 100}%` }}
-                         className="h-full bg-ainabi-blue shadow-[0_0_10px_#00E5FF]"
-                      />
-                   </div>
-                   <span className="text-[10px] font-mono text-ainabi-blue tracking-widest uppercase">{currentStep} / 8</span>
-                </div>
-                
-                {/* 이전 단계 버튼 (위치 이동) */}
-                <div className="flex justify-start">
-                   <button 
-                    onClick={handlePrev}
-                    className="flex items-center gap-2 text-white/80 hover:text-ainabi-green transition-colors text-sm font-bold tracking-widest uppercase"
-                   >
-                     <ArrowLeft className="w-4 h-4" />
-                     {currentStep === 1 ? '처음으로 돌아가기' : '이전 단계'}
-                   </button>
-                </div>
+            <FadeInSection>
+              <p style={{ marginBottom: '40px', fontWeight: 300 }}>이 세 가지 질문으로 문제의 구조가 정리됩니다</p>
+              
+              <div>
+                <Link href="/start" className="btn-primary">플랫폼 바로가기</Link>
+                <p className="hero-desc">3가지 질문으로 시작됩니다</p>
               </div>
+            </FadeInSection>
+          </div>
+        </section>
 
-              {/* Main Survey Card */}
-              <SurveyStep 
-                question={steps[currentStep-1].question}
-                description={steps[currentStep-1].description}
-                type={steps[currentStep-1].type as any}
-                options={steps[currentStep-1].options}
-                value={surveyData[steps[currentStep-1].key]}
-                onChange={(val) => updateSurveyData(steps[currentStep-1].key, val)}
-              />
+        {/* Section 2: Diagram */}
+        <section>
+          <div className="container">
+            <FadeInSection>
+              <h2 style={{ textAlign: 'center', fontSize: '14px', color: 'var(--neon-green)', letterSpacing: '0.4em', textTransform: 'uppercase', marginBottom: '40px', fontWeight: 900 }}>Systemic Flow</h2>
+              <div className="diagram-container">
+                <div className="node">문제</div>
+                <div className="connector"></div>
+                <div className="node active">3가지 질문</div>
+                <div className="connector"></div>
+                <div className="node">구조 분석</div>
+                <div className="connector"></div>
+                <div className="node">보충자료수집</div>
+                <div className="connector"></div>
+                <div className="node">전략 가이드</div>
+                <div className="connector"></div>
+                <div className="node">실행 지원</div>
+                <div className="connector"></div>
+                <div className="node">문제 종결</div>
+              </div>
+            </FadeInSection>
+          </div>
+        </section>
 
-              {/* [NEW] Primary Global CTA - 다음 단계 분석 단추 */}
-              <div className="mt-16 w-full max-w-2xl space-y-6">
-                 <button 
-                  onClick={handleNext}
-                  disabled={isSavingStep || !surveyData[steps[currentStep-1].key] || (Array.isArray(surveyData[steps[currentStep-1].key]) && surveyData[steps[currentStep-1].key].length === 0)}
-                  className="group relative w-full py-8 bg-white text-black text-xl font-black uppercase rounded-3xl hover:bg-ainabi-blue transition-all duration-500 overflow-hidden shadow-[0_20px_40px_rgba(0,0,0,0.3)] disabled:opacity-30 transition-transform active:scale-95"
-                >
-                  <div className="relative z-10 flex items-center justify-center gap-4">
-                     <span>{isSavingStep ? (
-                       <span className="flex items-center gap-2">
-                         <Activity className="w-6 h-6 animate-spin" />
-                         데이터 동기화 중...
-                       </span>
-                     ) : (
-                       currentStep === 8 ? 'AI 인과관계 분석 실행' : '다음 단계로'
-                     )}</span>
-                     {!isSavingStep && <ArrowRight className="w-6 h-6 group-hover:translate-x-2 transition-transform" />}
+        {/* Section 3: Services */}
+        <section>
+          <div className="container">
+            <div className="grid-3">
+              <FadeInSection>
+                <div className="card glass">
+                  <h3>기본 플랫폼 상담</h3>
+                  <p>AI 신경망 분석을 통해 문제의 핵심 인과관계를 차트로 구현하고 해결 우선순위를 도출합니다.</p>
+                </div>
+              </FadeInSection>
+              <FadeInSection delay={0.2}>
+                <div className="card glass">
+                  <h3>전문가 협업</h3>
+                  <p>이메일, 줌, 방문 상담을 통해 AI 분석 결과에 전문 상담사의 지능형 코칭을 더합니다.</p>
+                </div>
+              </FadeInSection>
+              <FadeInSection delay={0.4}>
+                <div className="card glass">
+                  <h3>후속 관리</h3>
+                  <p>상황 종료 시까지 지속적인 피드백과 단계별 시뮬레이션을 제공하여 실질적인 변화를 만듭니다.</p>
+                </div>
+              </FadeInSection>
+            </div>
+          </div>
+        </section>
+
+        {/* Section 4: Method */}
+        <section style={{ background: 'rgba(0,0,0,0.2)' }}>
+          <div className="container">
+            <div style={{ maxWidth: '600px', margin: '0 auto' }}>
+              <FadeInSection>
+                <h2 style={{ fontSize: '30px', fontWeight: 800, marginBottom: '40px' }}>아이나비의 방식</h2>
+                <div className="method-list">
+                  <div className="method-item">
+                    <div className="method-dot"></div>
+                    <span>구조 중심 : 객관적 관점의 인과관계</span>
                   </div>
-                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
-                </button>
-                <p className="text-center mt-6 text-[10px] font-mono text-white/60 uppercase tracking-[0.5em]">Neural Path Analysis Proceeding</p>
-              </div>
-            </motion.div>
-          )}
+                  <div className="method-item">
+                    <div className="method-dot"></div>
+                    <span>관계 중심 : 역동의 파악과 대응 전략</span>
+                  </div>
+                  <div className="method-item">
+                    <div className="method-dot"></div>
+                    <span>실행 중심 : 실전 대화와 구체적 행동</span>
+                  </div>
+                </div>
+              </FadeInSection>
+            </div>
+          </div>
+        </section>
 
-          {currentStage === 'ANALYZING' && (
-            <motion.div 
-              key="analyzing"
-              className="flex flex-col items-center justify-center p-20 space-y-10"
-            >
-              <div className="relative">
-                <Activity className="w-16 h-16 text-ainabi-blue animate-spin-slow" />
-                <div className="absolute inset-0 scale-150 blur-3xl bg-ainabi-blue/10 rounded-full"></div>
-              </div>
-              <div className="space-y-4 text-center">
-                <p className="text-white font-mono text-xl tracking-[0.5em] uppercase animate-pulse">Computing Path...</p>
-                <p className="text-ainabi-silver/80 text-xs font-light">문제의 인과 구조를 수학적으로 파악하는 중입니다.</p>
-              </div>
-            </motion.div>
-          )}
-
-          {currentStage === 'RESULT' && analysisResult && (
-            <motion.div 
-              key="result"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="w-full"
-            >
-              <AnalysisReport analysisResult={analysisResult} />
-
-              <div className="pt-20 border-t border-white/5 flex flex-col md:flex-row items-center justify-center gap-8">
-                <p className="text-white/70 text-[10px] font-mono tracking-[1em] uppercase md:mr-auto">End of Analysis v.1.5</p>
+        {/* Section 5: Capabilities */}
+        <section>
+          <div className="container" style={{ textAlign: 'center' }}>
+            <FadeInSection>
+              <div className="glass" style={{ padding: '80px 40px', display: 'inline-block', width: '100%', position: 'relative', overflow: 'hidden' }}>
+                <h2 style={{ fontSize: '12px', color: 'var(--neon-blue)', letterSpacing: '0.4em', marginBottom: '50px', textTransform: 'uppercase', fontWeight: 900 }}>The Professional Legacy</h2>
                 
-                <button 
-                  onClick={() => {
-                    if (!token) {
-                      setIsAuthModalOpen(true);
-                    } else {
-                      window.print();
-                    }
-                  }}
-                  className="px-10 py-5 bg-ainabi-blue text-black text-[10px] font-black tracking-widest uppercase rounded-full hover:shadow-[0_0_20px_#00E5FF] transition-all flex items-center gap-3 group/btn relative overflow-hidden"
-                >
-                  <Activity className="w-4 h-4" />
-                  <span>{token ? 'Export Report to PDF' : 'Save & Export Report (Premium)'}</span>
-                  {!token && <div className="absolute inset-0 bg-white/20 animate-pulse pointer-events-none" />}
-                </button>
+                <div style={{ marginBottom: '40px' }}>
+                  <span style={{ fontSize: '14px', color: 'var(--neon-green)', fontWeight: 700, letterSpacing: '0.2em', display: 'block', marginBottom: '8px' }}>대표 상담사</span>
+                  <h3 style={{ fontSize: '48px', fontWeight: 900, color: '#fff', letterSpacing: '-0.05em', lineHeight: 1 }}>성 주 향</h3>
+                </div>
 
-                <button 
-                  onClick={() => {
-                    setCurrentStage('READY');
-                    setCurrentStep(1);
-                    setSurveyData({ category: '', target: '', types: [], period: '', severity: '', impact: [], response: '', description: '' });
-                  }}
-                  className="px-10 py-5 text-[10px] font-black tracking-widest text-white/90 hover:text-white transition-all border border-white/10 rounded-full hover:bg-white/5 uppercase"
-                >
-                  Restart New Discovery
-                </button>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '40px', textAlign: 'left', maxWidth: '700px', margin: '0 auto', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '40px' }}>
+                  <div>
+                    <div style={{ marginBottom: '24px' }}>
+                      <h4 style={{ color: 'var(--neon-blue)', fontSize: '14px', fontWeight: 800, marginBottom: '12px', textTransform: 'uppercase' }}>Professional Expertise</h4>
+                      <p style={{ fontSize: '15px', color: 'rgba(255,255,255,0.8)', lineHeight: 1.8, fontWeight: 300 }}>
+                        40년 상담경력의 집약체<br/>
+                        (가정 · 성 · 직장 · 군대 · 경영 상담)<br/>
+                        국군간호사관학교 10기 (간호사)
+                      </p>
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ marginBottom: '24px' }}>
+                      <h4 style={{ color: 'var(--neon-blue)', fontSize: '14px', fontWeight: 800, marginBottom: '12px', textTransform: 'uppercase' }}>Leadership</h4>
+                      <p style={{ fontSize: '15px', color: 'rgba(255,255,255,0.8)', lineHeight: 1.8, fontWeight: 300 }}>
+                        한국가정법률상담소 울산지부 설립<br/>
+                        울산 YWCA 설립
+                      </p>
+                    </div>
+                    <div>
+                      <h4 style={{ color: 'var(--neon-green)', fontSize: '14px', fontWeight: 800, marginBottom: '12px', textTransform: 'uppercase' }}>Honors</h4>
+                      <p style={{ fontSize: '15px', color: '#fff', lineHeight: 1.8, fontWeight: 600 }}>
+                        대통령 표장<br/>
+                        국민훈장 목련장 수훈<br/>
+                        마르퀴즈 후즈 후(Marquis Who's Who) 등재
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div style={{ position: 'absolute', bottom: '-20px', right: '-20px', fontSize: '120px', fontWeight: 900, color: 'rgba(255,255,255,0.02)', pointerEvents: 'none', userSelect: 'none' }}>NABI</div>
               </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+            </FadeInSection>
+          </div>
+        </section>
+
+        {/* Section 6: CTA Bottom */}
+        <section className="cta-bottom">
+          <div className="container">
+            <FadeInSection>
+              <h2>
+                중요한 문제일수록<br/>
+                한 번은 구조로 정리해보셔야 합니다
+              </h2>
+              <div>
+                <Link href="/start" className="btn-primary">플랫폼 바로가기</Link>
+              </div>
+            </FadeInSection>
+          </div>
+        </section>
+
+        {/* Footer */}
+        <footer>
+          <div className="container">
+            <p>
+              © 2026 AI상담소 NABI. NEURAL ANALYSIS & <Link href="/admin" className="admin-link">B</Link>EHAVIORAL INTELLIGENCE. ALL RIGHTS RESERVED.
+            </p>
+          </div>
+        </footer>
       </div>
+    </div>
+  );
+}
 
-      {/* SUMMARY SIDEBAR */}
-      <SummaryPanel 
-        data={surveyData} 
-        active={currentStage === 'STEP'} 
-      />
+function FadeInSection({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) {
+  const controls = useAnimation();
+  const [ref, inView] = useInView({ threshold: 0.1, triggerOnce: true });
 
-      <footer className="relative w-full py-8 text-center z-10 mt-auto">
-        <p className="text-[10px] font-mono tracking-[0.2em] text-white uppercase drop-shadow-md font-bold px-4 pointer-events-none">
-          © 2026 AI상담소 NABI. NEURAL ANALYSIS & <span onClick={() => window.location.href='/ainabi/admin'} className="cursor-default pointer-events-auto hover:text-white/80 transition-colors">B</span>EHAVIORAL INTELLIGENCE. ALL RIGHTS RESERVED.
-        </p>
-      </footer>
+  useEffect(() => {
+    if (inView) {
+      controls.start('visible');
+    }
+  }, [controls, inView]);
 
-      <AuthModal 
-        isOpen={isAuthModalOpen} 
-        onClose={() => setIsAuthModalOpen(false)}
-        onSuccess={handleAuthSuccess}
-      />
-    </main>
+  return (
+    <motion.div
+      ref={ref}
+      animate={controls}
+      initial="hidden"
+      transition={{ duration: 0.8, delay, ease: [0.4, 0, 0.2, 1] }}
+      variants={{
+        visible: { opacity: 1, y: 0 },
+        hidden: { opacity: 0, y: 20 }
+      }}
+    >
+      {children}
+    </motion.div>
   );
 }
